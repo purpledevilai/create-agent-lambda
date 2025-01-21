@@ -5,7 +5,7 @@ from AWS.CloudWatchLogs import get_logger
 import AWS.DynamoDB as DynamoDB
 from LLM.CreateLLM import create_llm
 from LLM.LLMExtract import llm_extract
-from Models import Agent
+from Models import Agent, Job
 
 # Set up the logger
 logger = get_logger(log_level=os.environ["LOG_LEVEL"])
@@ -30,10 +30,23 @@ class CreateAgent(BaseModel):
 def lambda_handler(event: dict, context):
     logger.info("Received event: " + json.dumps(event, indent=2))
 
+    # Parse the event
     try:
-        # Parse the event
         event = CreateAgentEvent(**event)
+    except Exception as e:
+        logger.error(str(e))
+        return {
+            'error': str(e)
+        }
 
+    # Check if the job exists
+    if (not Job.job_exists(event.job_id)):
+        logger.error(f"Job {event.job_id} not found")
+        return {
+            'error': f"Job {event.job_id} not found"
+        }
+
+    try:
         # Get the agent template prompt from agent_template_id
         agent_template = DynamoDB.get_item("agent_templates", "agent_template_id", event.agent_template_id)
         if (agent_template is None):
@@ -45,12 +58,12 @@ def lambda_handler(event: dict, context):
             business_name=event.business_name,
             additional_information=f"{event.business_description} {event.additional_link_info}"
         )
-        print(agent_template_prompt)
         
         # Extract the agent details
         llm = create_llm()
         extract_agent = llm_extract(CreateAgent, agent_template_prompt, llm)
         extract_agent = CreateAgent(**extract_agent)
+        logger.info(f"Extracted agent: {extract_agent}")
 
         # Create the agent
         agent = Agent.create_agent(
@@ -63,29 +76,25 @@ def lambda_handler(event: dict, context):
         )
 
         # Get the Job
-        job = DynamoDB.get_item("jobs", "job_id", event.job_id)
-        if (job is None):
-            raise Exception("Job not found")
+        job = Job.get_job(event.job_id)
         
         # Set job's data agent_template_id as true
-        job["data"][event.agent_template_id] = True
+        job.data[event.agent_template_id] = True
 
         # Set complete if all other agent_templates_id are true
-        is_complete = True
-        for agent_template_id in job["data"].keys():
-            is_complete = is_complete and job["data"][agent_template_id]
-        job["status"] = "complete" if is_complete else job["status"]
+        is_complete = all(job.data.values())
+        job.status = Job.JobStatus.completed if is_complete else job.status
 
         # Save the job status
-        DynamoDB.put_item("jobs", job)
+        Job.save_job(job)
 
         # Return the model
         return agent.model_dump()
 
-    # Return any errors   
+    # Return any errors and set the job status to error  
     except Exception as e:
         logger.error(str(e))
-        error, code = e.args if len(e.args) == 2 else (e, 500)
-        return {
-            'error': str(error)
-        }
+        job = Job.get_job(event.job_id)
+        job.status = "error"
+        job.message = str(e)
+        Job.save_job(job)
