@@ -20,7 +20,7 @@ jobs:
         AWS_REGION: ${{ secrets.AWS_REGION }}
       run: |
         if [ "${{ github.ref }}" == "refs/heads/main" ]; then
-          FUNCTION_NAME="agent-lambda-function"
+          FUNCTION_NAME="create-agent-lambda"
         fi
 
         cd src
