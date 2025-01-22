@@ -46,7 +46,7 @@ def create_job(
         created_at=created_at,
         updated_at=updated_at
     )
-    put_item(JOBS_TABLE_NAME, job.dict())
+    put_item(JOBS_TABLE_NAME, job.model_dump())
     return job
 
 def get_job(job_id: str) -> Job:
