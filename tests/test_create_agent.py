@@ -1,9 +1,9 @@
+from src.Models import Job, Agent
+from src.lambda_function import lambda_handler
+from tests.config import org_id, user_id, additional_link_info
 import unittest
 import sys
 sys.path.append("../")
-from tests.config import org_id, user_id, additional_link_info
-from src.lambda_function import lambda_handler
-from src.Models import Job, Agent
 
 
 class TestCreateAgent(unittest.TestCase):
@@ -14,7 +14,10 @@ class TestCreateAgent(unittest.TestCase):
         job = Job.create_job(
             owner_id=user_id,
             data={
-                "customer-support": False
+                "customer-support": {
+                    "completed": False,
+                    "agent_id": None
+                }
             }
         )
 
@@ -37,7 +40,3 @@ class TestCreateAgent(unittest.TestCase):
         # Clean up
         Job.delete_job(job.job_id)
         Agent.delete_agent(result["agent_id"])
-
-    
-
-    

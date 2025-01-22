@@ -79,11 +79,15 @@ def lambda_handler(event: dict, context):
         job = Job.get_job(event.job_id)
         
         # Set job's data agent_template_id as true
-        job.data[event.agent_template_id] = True
+        job.data[event.agent_template_id]["completed"] = True
+        job.data[event.agent_template_id]["agent_id"] = agent.agent_id
 
         # Set complete if all other agent_templates_id are true
-        is_complete = all(job.data.values())
-        job.status = Job.JobStatus.completed if is_complete else job.status
+        is_complete = True
+        for agent_template_id in job.data.keys():
+            is_complete = is_complete and job.data[agent_template_id]["completed"]
+        if is_complete:
+            job.status = Job.JobStatus.completed
 
         # Save the job status
         Job.save_job(job)
